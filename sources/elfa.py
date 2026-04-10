@@ -22,7 +22,7 @@ def _get(api_key: str, path: str, params: dict | None = None, retries: int = 3) 
     url = f"{BASE}{path}"
     for attempt in range(retries):
         try:
-            resp = requests.get(url, headers=_headers(api_key), params=params, timeout=30)
+            resp = requests.get(url, headers=_headers(api_key), params=params, timeout=60)
             if resp.status_code == 429:
                 wait = int(resp.headers.get("Retry-After", 5))
                 log.warning(f"Rate limited, waiting {wait}s")
@@ -49,30 +49,40 @@ def get_trending_narratives(api_key: str, time_frame: str = "day", max_narrative
     })
     results = []
     raw = data.get("data", data)
+    # Handle nested: data.trending_narratives, data.narratives, data.items
+    if isinstance(raw, dict):
+        raw = raw.get("trending_narratives", raw.get("narratives", raw.get("items", [raw])))
     if isinstance(raw, dict):
         raw = [raw]
-    for item in raw:
-        name = item.get("name") or item.get("narrative") or item.get("title", "Unknown")
+
+    for i, item in enumerate(raw):
+        if not isinstance(item, dict):
+            continue
+        name = item.get("narrative") or item.get("name") or item.get("title", f"Narrative {i+1}")
         keywords = item.get("keywords", [])
         if not keywords:
-            # Generate keywords from narrative name
-            keywords = [name.lower()] + name.lower().split()[:3]
+            words = name.lower().split()
+            stops = {"the", "a", "an", "is", "at", "on", "in", "of", "to", "for", "and", "or",
+                     "vs", "with", "without", "from", "its", "his", "her", "our", "their"}
+            keywords = [w for w in words if w not in stops and len(w) > 2][:5]
+            if not keywords:
+                keywords = [name.lower()[:30]]
         results.append({
             "name": name,
-            "keywords": keywords if isinstance(keywords, list) else [str(keywords)],
-            "rank": item.get("rank", len(results) + 1),
-            "tweet_count": item.get("tweetCount", item.get("count", 0)),
+            "keywords": keywords,
+            "rank": i + 1,
+            "tweet_count": item.get("tweetCount", len(item.get("tweet_ids", []))),
+            "source_links": item.get("source_links", []),
         })
-    # Ensure ranks
-    for i, r in enumerate(results):
-        if not r.get("rank"):
-            r["rank"] = i + 1
+
     return results
 
 
 def get_keyword_mentions(api_key: str, keywords: list[str], time_window: str = "24h",
                          limit: int = 30, search_type: str = "or") -> list[dict]:
-    """Search mentions by keywords. Costs 1 credit per call."""
+    """Search mentions by keywords. Costs 1 credit per call.
+    Note: Returns metadata only (engagement, account), not tweet text.
+    """
     kw_str = ",".join(keywords[:5])  # API max 5 keywords
     data = _get(api_key, "/data/keyword-mentions", {
         "keywords": kw_str,
@@ -81,15 +91,33 @@ def get_keyword_mentions(api_key: str, keywords: list[str], time_window: str = "
         "searchType": search_type,
     })
     results = []
-    for item in data.get("data", []):
+    raw = data.get("data", data)
+    if isinstance(raw, dict):
+        raw = raw.get("items", raw.get("mentions", [raw]))
+
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        account = item.get("account", {})
+        engagement = item.get("likeCount", 0) + item.get("repostCount", 0) * 2 + item.get("viewCount", 0) // 100
         results.append({
-            "text": item.get("content", item.get("text", "")),
-            "engagement": item.get("engagement", item.get("likeCount", 0)) or 0,
-            "account": item.get("username", item.get("account", "")),
-            "is_smart": item.get("isSmartAccount", item.get("smartAccount", False)),
-            "token": item.get("token", item.get("cashtag", "")),
-            "timestamp": item.get("timestamp", item.get("createdAt", "")),
+            "tweet_id": item.get("tweetId", ""),
+            "link": item.get("link", ""),
+            "engagement": engagement,
+            "likes": item.get("likeCount", 0),
+            "reposts": item.get("repostCount", 0),
+            "views": item.get("viewCount", 0),
+            "replies": item.get("replyCount", 0),
+            "bookmarks": item.get("bookmarkCount", 0),
+            "account": account.get("username", ""),
+            "is_verified": account.get("isVerified", False),
+            "is_smart": item.get("repostBreakdown", {}).get("smart", 0) > 0,
+            "smart_reposts": item.get("repostBreakdown", {}).get("smart", 0),
+            "ct_reposts": item.get("repostBreakdown", {}).get("ct", 0),
+            "mentioned_at": item.get("mentionedAt", ""),
+            "type": item.get("type", "post"),
         })
+
     # Sort by engagement descending
     results.sort(key=lambda x: x["engagement"], reverse=True)
     return results
@@ -105,12 +133,20 @@ def get_trending_tokens(api_key: str, time_window: str = "4h",
     })
     results = []
     raw = data.get("data", data)
+    # Handle nested: data.data, data.tokens, data.items
     if isinstance(raw, dict):
-        raw = raw.get("tokens", raw.get("items", [raw]))
+        raw = raw.get("data", raw.get("tokens", raw.get("items", [])))
+    if isinstance(raw, dict):
+        raw = [raw]
+
     for item in raw:
+        if not isinstance(item, dict):
+            continue
         results.append({
             "token": item.get("token", item.get("symbol", item.get("name", ""))),
-            "mentions": item.get("mentionCount", item.get("mentions", 0)) or 0,
-            "engagement": item.get("engagement", 0) or 0,
+            "mentions": item.get("current_count", item.get("mentionCount", item.get("mentions", 0))),
+            "previous_mentions": item.get("previous_count", 0),
+            "change_percent": item.get("change_percent", 0),
         })
+
     return results

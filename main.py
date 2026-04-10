@@ -103,16 +103,10 @@ def run_daily(cfg: dict, no_telegram: bool = False, output_format: str = "text")
         )
         credits_used += CREDITS_PER_NARRATIVE
         narrative_mentions[name] = mentions
-        # Extract unique token symbols
-        tokens = []
-        seen = set()
-        for m in mentions:
-            token = (m.get("token", "") or "").upper().lstrip("$")
-            if token and token not in seen:
-                seen.add(token)
-                tokens.append({"token": token, "engagement": m.get("engagement", 0)})
-        narrative_tokens[name] = tokens
-        log.info(f"  {name}: {len(mentions)} mentions, {len(tokens)} tokens")
+        # Elfa API doesn't return token/ticker per mention — use engagement data
+        # Tokens will come from trending-tokens and CoinGecko instead
+        narrative_tokens[name] = []
+        log.info(f"  {name}: {len(mentions)} mentions")
 
     # Step 4: Emerging social tokens (1 credit)
     log.info("Fetching trending tokens (4h)...")
@@ -144,13 +138,10 @@ def run_daily(cfg: dict, no_telegram: bool = False, output_format: str = "text")
     # Update signal history from previous state
     classified = signal_analysis.update_signal_history(classified, STATE_DIR, state_storage)
 
-    # Step 6: Sentiment analysis (LLM call)
-    log.info("Running sentiment analysis (LLM)...")
+    # Step 6: Sentiment analysis (engagement-based)
+    log.info("Running sentiment analysis...")
     sentiment = sentiment_analysis.analyze_sentiment(
         narrative_mentions=narrative_mentions,
-        provider=cfg["llm_provider"],
-        model=cfg["llm_model"],
-        api_key=cfg["llm_key"],
     )
 
     # Step 7: Narrative shifts

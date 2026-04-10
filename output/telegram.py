@@ -81,11 +81,11 @@ def _send_message(bot_token: str, chat_id: str, text: str) -> bool:
     """Send a single message via Telegram Bot API."""
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     try:
-        resp = requests.post(url, json={
+        payload = {
             "chat_id": chat_id,
             "text": text,
-            "parse_mode": None,  # Plain text, no markdown
-        }, timeout=30)
+        }
+        resp = requests.post(url, json=payload, timeout=30)
         if resp.status_code == 200:
             return True
         else:

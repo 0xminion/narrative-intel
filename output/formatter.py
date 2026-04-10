@@ -287,7 +287,7 @@ def _get_narrative_tokens(classified: dict, narrative_name: str) -> list[dict]:
     """Get tokens belonging to a narrative, sorted by signal strength."""
     tokens = []
     for symbol, info in classified.items():
-        if info.get("narrative", "").lower() == narrative_name.lower():
+        if (info.get("narrative") or "").lower() == narrative_name.lower():
             tokens.append(info)
     # Sort: double-confirmed first, then social-first, then price-first
     signal_order = {"double-confirmed": 0, "social-first": 1, "price-first": 2}

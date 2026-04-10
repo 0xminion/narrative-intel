@@ -3,6 +3,7 @@
 import subprocess
 import json
 import logging
+import re
 from typing import Any
 
 log = logging.getLogger(__name__)
@@ -28,32 +29,18 @@ def _run(args: list[str], timeout: int = 30) -> str:
 def get_trending(limit: int = 15) -> list[dict]:
     """Get CoinGecko trending tokens."""
     try:
-        output = _run(["trending"])
-        lines = output.strip().split("\n")
+        output = _run(["trending", "-o", "json"])
+        data = json.loads(output)
         results = []
-        for line in lines:
-            # Skip empty lines, header rows, and separator lines
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#") or stripped.startswith("-"):
-                continue
-            # Skip common header patterns
-            lower = stripped.lower()
-            if lower.startswith("rank") or lower.startswith("symbol") or lower.startswith("name"):
-                continue
-            parts = stripped.split()
-            if len(parts) >= 2:
-                # First column is symbol, last column might be rank/price, rest is name
-                symbol = parts[0].strip().upper().lstrip("$")
-                # Skip if first "word" doesn't look like a token symbol
-                if not symbol or not any(c.isalpha() for c in symbol):
-                    continue
+        coins = data.get("coins", data) if isinstance(data, dict) else data
+        for item in coins[:limit]:
+            if isinstance(item, dict):
+                coin = item.get("item", item)
                 results.append({
-                    "symbol": symbol,
-                    "name": " ".join(parts[1:-1]) if len(parts) > 2 else parts[1],
+                    "symbol": coin.get("symbol", "").upper(),
+                    "name": coin.get("name", ""),
                     "rank": len(results) + 1,
                 })
-            if len(results) >= limit:
-                break
         return results
     except Exception as e:
         log.warning(f"Failed to get trending: {e}")
@@ -61,133 +48,140 @@ def get_trending(limit: int = 15) -> list[dict]:
 
 
 def get_top_gainers_losers(top: int = 300) -> dict:
-    """Get top gainers and losers from top N market cap tokens."""
+    """Get top gainers and losers from top N market cap coins.
+    Note: This is a paid CoinGecko CLI feature. Falls back to empty if unavailable.
+    """
     try:
-        output = _run(["top-gainers-losers"])
-        lines = output.strip().split("\n")
+        # Get gainers
+        gainer_output = _run(["top-gainers-losers", "--top-coins", str(top), "-o", "json"])
+        gainers = _parse_gainer_loser_json(gainer_output)
 
-        gainers = []
-        losers = []
-        section = None
-
-        for line in lines:
-            lower = line.lower()
-            if "gainer" in lower:
-                section = "gainers"
-                continue
-            elif "loser" in lower:
-                section = "losers"
-                continue
-
-            if section and line.strip() and not line.startswith("-"):
-                # Parse: SYMBOL price change%
-                parts = line.split()
-                if len(parts) >= 3:
-                    entry = {
-                        "symbol": parts[0].strip().upper().lstrip("$"),
-                        "change_24h": _parse_change(parts[-1]) if "%" in parts[-1] else 0,
-                    }
-                    if section == "gainers":
-                        gainers.append(entry)
-                    else:
-                        losers.append(entry)
+        # Get losers
+        try:
+            loser_output = _run(["top-gainers-losers", "--top-coins", str(top), "--losers", "-o", "json"])
+            losers = _parse_gainer_loser_json(loser_output)
+        except RuntimeError:
+            losers = []
 
         return {"gainers": gainers[:10], "losers": losers[:10]}
+    except RuntimeError as e:
+        if "paid" in str(e).lower() or "analyst" in str(e).lower() or "subscription" in str(e).lower():
+            log.info("top-gainers-losers requires paid CoinGecko plan, skipping")
+        else:
+            log.warning(f"Failed to get gainers/losers: {e}")
+        return {"gainers": [], "losers": []}
     except Exception as e:
         log.warning(f"Failed to get gainers/losers: {e}")
         return {"gainers": [], "losers": []}
 
 
-def _parse_change(s: str) -> float:
-    """Parse a percentage string like '+12.34%' or '-5.6%'."""
+def _parse_gainer_loser_json(output: str) -> list[dict]:
+    """Parse JSON output from top-gainers-losers."""
     try:
-        return float(s.replace("%", "").replace("+", "").strip())
-    except ValueError:
-        return 0.0
+        data = json.loads(output)
+        results = []
+        items = data if isinstance(data, list) else data.get("coins", data.get("items", []))
+        for item in items:
+            if isinstance(item, dict):
+                results.append({
+                    "symbol": item.get("symbol", "").upper(),
+                    "change_24h": _parse_change(item.get("price_change_percentage_24h",
+                                       item.get("change", item.get("price_change", 0)))),
+                })
+        return results
+    except (json.JSONDecodeError, TypeError):
+        return []
 
 
-def get_price(token: str) -> dict | None:
-    """Get current price, 24h change, and market cap for a token."""
+def _parse_change(val) -> float:
+    """Parse a percentage value from string or number."""
+    if isinstance(val, (int, float)):
+        return float(val)
+    if isinstance(val, str):
+        try:
+            return float(val.replace("%", "").replace("+", "").strip())
+        except ValueError:
+            return 0.0
+    return 0.0
+
+
+def get_price(symbol: str) -> dict | None:
+    """Get current price, 24h change, and market cap for a token by symbol."""
     try:
-        output = _run(["price", token])
-        # Parse the output - cg price format varies
-        lines = output.strip().split("\n")
-        result = {"symbol": token.upper()}
-        for line in lines:
-            lower = line.lower()
-            parts = line.split(":")
-            if len(parts) >= 2:
-                val = parts[1].strip()
-                if "price" in lower:
-                    result["price"] = _parse_number(val)
-                elif "24h" in lower or "change" in lower:
-                    result["change_24h"] = _parse_change(val)
-                elif "market cap" in lower or "mcap" in lower:
-                    result["market_cap"] = _parse_number(val)
-                elif "volume" in lower:
-                    result["volume"] = _parse_number(val)
-        return result if "price" in result else None
+        output = _run(["price", "--symbols", symbol.lower(), "-o", "json"])
+        data = json.loads(output)
+        # The JSON structure depends on the cg CLI version
+        if isinstance(data, dict):
+            # Find the token data (key might be symbol in various cases)
+            token_data = data.get(symbol.upper(), data.get(symbol.lower(), data))
+            if isinstance(token_data, dict):
+                return {
+                    "symbol": symbol.upper(),
+                    "price": _parse_number(token_data.get("usd", token_data.get("price", 0))),
+                    "change_24h": _parse_change(token_data.get("usd_24h_change",
+                                       token_data.get("price_change_24h", 0))),
+                    "market_cap": _parse_number(token_data.get("usd_market_cap",
+                                       token_data.get("market_cap", 0))),
+                    "volume": _parse_number(token_data.get("usd_24h_vol",
+                                     token_data.get("volume", 0))),
+                }
+        return None
     except Exception as e:
-        log.warning(f"Failed to get price for {token}: {e}")
+        log.warning(f"Failed to get price for {symbol}: {e}")
         return None
 
 
-def get_prices_batch(tokens: list[str]) -> dict[str, dict]:
-    """Get prices for multiple tokens. Tries batch first, falls back to individual."""
+def get_prices_batch(symbols: list[str]) -> dict[str, dict]:
+    """Get prices for multiple symbols in a single batch call."""
     results = {}
-    if not tokens:
+    if not symbols:
         return results
 
-    # Try batch (cg may support comma-separated)
-    try:
-        batch_str = ",".join(tokens[:10])  # Limit batch size
-        output = _run(["price", batch_str])
-        # Parse batch output
-        for token in tokens[:10]:
-            results[token.upper()] = {"symbol": token.upper(), "price": 0,
-                                       "change_24h": 0, "market_cap": 0, "volume": 0}
-        # Try to parse from output
-        lines = output.split("\n")
-        current_token = None
-        for line in lines:
-            for token in tokens:
-                if token.upper() in line.upper():
-                    current_token = token.upper()
-            if current_token:
-                lower = line.lower()
-                parts = line.split(":")
-                if len(parts) >= 2:
-                    val = parts[1].strip()
-                    if "price" in lower:
-                        results[current_token]["price"] = _parse_number(val)
-                    elif "24h" in lower or "change" in lower:
-                        results[current_token]["change_24h"] = _parse_change(val)
-    except Exception:
-        pass
-
-    # Fetch remaining individually
-    remaining = [t for t in tokens if t.upper() not in results]
-    for token in remaining:
-        data = get_price(token)
-        if data:
-            results[token.upper()] = data
-        else:
-            results[token.upper()] = {"symbol": token.upper(), "price": 0,
-                                       "change_24h": 0, "market_cap": 0, "volume": 0}
+    # Batch up to 50 symbols per call
+    batch_size = 50
+    for i in range(0, len(symbols), batch_size):
+        batch = symbols[i:i + batch_size]
+        symbols_str = ",".join(s.lower() for s in batch)
+        try:
+            output = _run(["price", "--symbols", symbols_str, "-o", "json"])
+            data = json.loads(output)
+            if isinstance(data, dict):
+                for sym in batch:
+                    token_data = data.get(sym.upper(), data.get(sym.lower(), {}))
+                    if isinstance(token_data, dict) and token_data:
+                        results[sym.upper()] = {
+                            "symbol": sym.upper(),
+                            "price": _parse_number(token_data.get("usd", 0)),
+                            "change_24h": _parse_change(token_data.get("usd_24h_change", 0)),
+                            "market_cap": _parse_number(token_data.get("usd_market_cap", 0)),
+                            "volume": _parse_number(token_data.get("usd_24h_vol", 0)),
+                        }
+                    else:
+                        results[sym.upper()] = {"symbol": sym.upper(), "price": 0,
+                                                  "change_24h": 0, "market_cap": 0, "volume": 0}
+        except Exception as e:
+            log.warning(f"Batch price fetch failed: {e}")
+            for sym in batch:
+                results[sym.upper()] = {"symbol": sym.upper(), "price": 0,
+                                          "change_24h": 0, "market_cap": 0, "volume": 0}
 
     return results
 
 
-def _parse_number(s: str) -> float:
-    """Parse a number string like '$1,234.56' or '1.2M' or '500K'."""
-    try:
-        s = s.strip().replace("$", "").replace(",", "")
-        if s.upper().endswith("B"):
-            return float(s[:-1]) * 1e9
-        if s.upper().endswith("M"):
-            return float(s[:-1]) * 1e6
-        if s.upper().endswith("K"):
-            return float(s[:-1]) * 1e3
-        return float(s)
-    except ValueError:
-        return 0.0
+def _parse_number(val) -> float:
+    """Parse a number from various formats."""
+    if isinstance(val, (int, float)):
+        return float(val)
+    if isinstance(val, str):
+        try:
+            val = val.strip().replace("$", "").replace(",", "")
+            if val.upper().endswith("B"):
+                return float(val[:-1]) * 1e9
+            if val.upper().endswith("M"):
+                return float(val[:-1]) * 1e6
+            if val.upper().endswith("K"):
+                return float(val[:-1]) * 1e3
+            return float(val)
+        except ValueError:
+            return 0.0
+    return 0.0

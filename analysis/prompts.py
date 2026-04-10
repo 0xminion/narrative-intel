@@ -20,7 +20,7 @@ def detect_contradictions(narratives: list[dict], shifts: dict, classified: dict
 
             # Get tokens for this narrative
             narrative_tokens = {s: info for s, info in classified.items()
-                                if info.get("narrative", "").lower() == name_lower}
+                                if (info.get("narrative") or "").lower() == name_lower}
 
             # Contradiction 1: social_up_price_flat
             if shift_type == "positive" and narrative_tokens:
@@ -230,16 +230,24 @@ Return the same JSON structure with polished text. Keep each question as a singl
 
 def _call_llm(provider: str, model: str, api_key: str, system: str, user: str) -> str:
     """Call the appropriate LLM API."""
-    if provider == "openai":
-        resp = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={"model": model, "messages": [
+    base_urls = {
+        "openai": "https://api.openai.com/v1",
+        "openrouter": "https://openrouter.ai/api/v1",
+    }
+
+    if provider in ("openai", "openrouter"):
+        url = f"{base_urls.get(provider, base_urls['openai'])}/chat/completions"
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        if provider == "openrouter":
+            headers["HTTP-Referer"] = "https://github.com/narrative-intel"
+        resp = requests.post(url, headers=headers, json={
+            "model": model,
+            "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
-            ], "temperature": 0.3},
-            timeout=60,
-        )
+            ],
+            "temperature": 0.3,
+        }, timeout=90)
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"]
     elif provider == "anthropic":
@@ -249,7 +257,7 @@ def _call_llm(provider: str, model: str, api_key: str, system: str, user: str) -
                       "Content-Type": "application/json"},
             json={"model": model, "max_tokens": 4096, "system": system,
                   "messages": [{"role": "user", "content": user}], "temperature": 0.3},
-            timeout=60,
+            timeout=90,
         )
         resp.raise_for_status()
         return resp.json()["content"][0]["text"]
