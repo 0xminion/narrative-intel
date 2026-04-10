@@ -1,0 +1,46 @@
+# Narrative Intel Configuration
+# Copy to config.yaml and fill in your values
+
+# Default Telegram bot token (can override per destination)
+bot_token: ""  # or leave empty, falls back to TELEGRAM_BOT_TOKEN env var
+
+# LLM configuration for sentiment analysis and question generation
+llm:
+  provider: "openai"           # openai or anthropic
+  model: "gpt-4o-mini"         # e.g., gpt-4o-mini, claude-sonnet-4-20250514
+  # api_key resolved from LLM_API_KEY env var by default
+
+# Elfa API configuration
+elfa:
+  # api_key resolved from ELFA_API_KEY env var by default
+  pass
+
+# Analysis settings
+settings:
+  top_narratives: 10           # number of narratives to fetch
+  min_mentions: 15             # minimum mentions for trending-tokens
+  tokens_per_narrative_shift: 5    # tokens to show for big shifts
+  tokens_per_narrative_neutral: 3  # tokens to show for stable narratives
+  retention_days: 30           # delete reports older than this
+  sentiment_mentions: 30       # top N mentions per narrative for sentiment
+
+# Delivery destinations
+destinations:
+  - name: "main-channel"
+    chat_id: "-1001234567890"  # your channel/group/private chat ID
+    daily: true
+    weekly: true
+
+  # Example: second destination with different bot
+  # - name: "signals-group"
+  #   chat_id: "-1009876543210"
+  #   bot_token: "789012:XYZ-different-bot-token"
+  #   daily: true
+  #   weekly: false
+
+  # Example: webhook delivery
+  # - name: "external-bot"
+  #   webhook_url: "https://other-bot.example.com/report"
+  #   format: "json"  # or "text"
+  #   daily: true
+  #   weekly: true
