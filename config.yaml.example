@@ -17,6 +17,7 @@ elfa:
 
 # Analysis settings
 settings:
+  timezone: "Asia/Singapore"   # IANA timezone for report timestamps (e.g., Asia/Singapore, US/Eastern, UTC)
   top_narratives: 10           # number of narratives to fetch
   min_mentions: 15             # minimum mentions for trending-tokens
   tokens_per_narrative_shift: 5    # tokens to show for big shifts

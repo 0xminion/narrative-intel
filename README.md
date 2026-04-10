@@ -76,6 +76,7 @@ llm:
   model: "gpt-4o-mini"          # or claude-sonnet-4-20250514
 
 settings:
+  timezone: "Asia/Singapore"    # IANA timezone for report timestamps
   top_narratives: 10
   min_mentions: 15
   tokens_per_narrative_shift: 5
@@ -124,12 +125,25 @@ destinations:
 
 ## Cron Setup
 
+**The code has no hardcoded times.** You set the schedule entirely via cron. The report header shows the actual run time based on your configured timezone.
+
 ```bash
-# Daily report at 09:00 GMT+8 (01:00 UTC)
+# Set your timezone in config.yaml (IANA format):
+#   timezone: "Asia/Singapore"    # GMT+8
+#   timezone: "US/Eastern"        # EST/EDT
+#   timezone: "UTC"               # UTC
+
+# Then schedule the cron in UTC accordingly:
+
+# Daily at 09:00 GMT+8 = 01:00 UTC
 0 1 * * * cd /path/to/narrative-intel && python main.py daily >> /var/log/narrative-daily.log 2>&1
 
-# Weekly report on Sunday 09:05 GMT+8 (01:05 UTC)
+# Weekly on Sunday at 09:05 GMT+8 = 01:05 UTC
 5 1 * * 0 cd /path/to/narrative-intel && python main.py weekly >> /var/log/narrative-weekly.log 2>&1
+
+# Or any interval you want:
+# 0 */6 * * *  cd /path/to/narrative-intel && python main.py daily   # every 6 hours
+# 0 22 * * *   cd /path/to/narrative-intel && python main.py daily   # daily at 10pm
 ```
 
 ## CLI Usage
@@ -155,7 +169,7 @@ python main.py cleanup
 
 ```
 📊 NARRATIVE SHIFT REPORT — Apr 10
-⏰ 09:00 GMT+8 | 📊 16 credits
+⏰ 09:00 GMT+8:00 | 📊 16 credits
 
 ══════════════════════════════
 🔥 BIGGEST POSITIVE SHIFTS

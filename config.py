@@ -2,9 +2,13 @@
 
 import os
 import sys
+import logging
 import yaml
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 # Load .env from same directory as this script
 load_dotenv(Path(__file__).parent / ".env")
@@ -54,12 +58,32 @@ def load():
         print("ERROR: No destinations configured in config.yaml", file=sys.stderr)
         sys.exit(1)
 
+    # Resolve timezone
+    import zoneinfo
+    tz_name = settings.get("timezone", "UTC")
+    try:
+        tz = zoneinfo.ZoneInfo(tz_name)
+    except KeyError:
+        log.warning(f"Unknown timezone '{tz_name}', falling back to UTC")
+        tz = timezone.utc
+        tz_name = "UTC"
+
+    # Calculate UTC offset string for display
+    now = datetime.now(tz)
+    offset = now.strftime("%z")  # e.g., +0800
+    offset_display = f"GMT{offset[:3]}:{offset[3:]}" if offset else "UTC"
+    if offset_display == "GMT+00:00":
+        offset_display = "UTC"
+
     return {
         "elfa_key": elfa_key,
         "llm_key": llm_key,
         "llm_provider": llm.get("provider", "openai"),
         "llm_model": llm.get("model", "gpt-4o-mini"),
         "bot_token": bot_token,
+        "timezone": tz,
+        "timezone_name": tz_name,
+        "timezone_display": offset_display,
         "settings": {
             "top_narratives": settings.get("top_narratives", 10),
             "min_mentions": settings.get("min_mentions", 15),

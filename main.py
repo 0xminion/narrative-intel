@@ -11,7 +11,7 @@ Usage:
 import sys
 import json
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 # Add project root to path
@@ -33,8 +33,6 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 log = logging.getLogger("narrative-intel")
-
-GMT8 = timezone(timedelta(hours=8))
 CREDITS_PER_NARRATIVE = 1
 CREDITS_TRENDING_NARRATIVES = 5
 CREDITS_TRENDING_TOKENS = 1
@@ -189,6 +187,8 @@ def run_daily(cfg: dict, no_telegram: bool = False, output_format: str = "text")
         cg_cross=cg_cross,
         credits_used=credits_used,
         settings=settings,
+        tz=cfg["timezone"],
+        tz_display=cfg["timezone_display"],
     )
 
     # Step 10: Output
@@ -206,7 +206,7 @@ def run_daily(cfg: dict, no_telegram: bool = False, output_format: str = "text")
         print(report)
 
     # Save report to file
-    today = datetime.now(GMT8).strftime("%Y-%m-%d")
+    today = datetime.now(cfg["timezone"]).strftime("%Y-%m-%d")
     report_path = DAILY_DIR / f"{today}.txt"
     with open(report_path, "w") as f:
         f.write(report)
@@ -277,6 +277,7 @@ def run_weekly(cfg: dict, no_telegram: bool = False, output_format: str = "text"
     report = formatter.format_weekly(
         agg=agg, themes=themes, questions=questions,
         token_progression=token_progression, cross_signals=cross_signals,
+        tz=cfg["timezone"],
     )
 
     # Output
@@ -287,7 +288,7 @@ def run_weekly(cfg: dict, no_telegram: bool = False, output_format: str = "text"
         print(report)
 
     # Save
-    now = datetime.now(GMT8)
+    now = datetime.now(cfg["timezone"])
     week_str = now.strftime("%Y-W%W")
     report_path = WEEKLY_DIR / f"weekly-{week_str}.txt"
     with open(report_path, "w") as f:

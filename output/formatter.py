@@ -6,22 +6,23 @@ from analysis.signals import get_signal_display
 
 log = logging.getLogger(__name__)
 
-GMT8 = timezone(timedelta(hours=8))
-
 
 def format_daily(narratives: list[dict], shifts: dict, velocity: dict,
                  boundary: list[dict], classified: dict, sentiment: dict,
                  questions: dict, cg_cross: list[dict], credits_used: int,
-                 settings: dict) -> str:
+                 settings: dict, tz: timezone = None, tz_display: str = "UTC") -> str:
     """Format the daily narrative shift report."""
-    now = datetime.now(GMT8)
+    if tz is None:
+        tz = timezone.utc
+    now = datetime.now(tz)
     date_str = now.strftime("%b %d")
+    time_str = now.strftime("%H:%M")
     tokens_shift = settings.get("tokens_shift", 5)
     tokens_neutral = settings.get("tokens_neutral", 3)
 
     lines = []
     lines.append(f"📊 NARRATIVE SHIFT REPORT — {date_str}")
-    lines.append(f"⏰ 09:00 GMT+8 | 📊 {credits_used} credits")
+    lines.append(f"⏰ {time_str} {tz_display} | 📊 {credits_used} credits")
     lines.append("")
 
     # Positive shifts
@@ -185,9 +186,12 @@ def format_daily(narratives: list[dict], shifts: dict, velocity: dict,
 
 
 def format_weekly(agg: dict, themes: dict, questions: list[str],
-                  token_progression: dict, cross_signals: list[str]) -> str:
+                  token_progression: dict, cross_signals: list[dict],
+                  tz: timezone = None) -> str:
     """Format the weekly highlights report."""
-    now = datetime.now(GMT8)
+    if tz is None:
+        tz = timezone.utc
+    now = datetime.now(tz)
     week_start = (now - timedelta(days=6)).strftime("%b %d")
     week_end = now.strftime("%b %d")
 
