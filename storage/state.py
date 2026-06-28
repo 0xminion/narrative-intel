@@ -2,15 +2,21 @@
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 log = logging.getLogger(__name__)
 
+# Default timezone — can be overridden by passing tz to functions
+_DEFAULT_TZ = timezone.utc
 
-def save_state(state_dir: Path, narratives: list[dict], extra: dict | None = None) -> None:
+
+def save_state(state_dir: Path, narratives: list[dict], extra: dict | None = None,
+                tz=None) -> None:
     """Save today's narrative state. Overwrites latest.json and creates dated copy."""
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+    if tz is None:
+        tz = _DEFAULT_TZ
+    today = datetime.now(tz).strftime("%Y-%m-%d")
 
     state = {
         "date": today,
@@ -63,10 +69,12 @@ def load_state_date(state_dir: Path, date_str: str) -> dict | None:
         return None
 
 
-def load_week(state_dir: Path, days: int = 7) -> list[dict]:
+def load_week(state_dir: Path, days: int = 7, tz=None) -> list[dict]:
     """Load states for the past N days."""
     states = []
-    today = datetime.utcnow()
+    if tz is None:
+        tz = _DEFAULT_TZ
+    today = datetime.now(tz)
 
     for i in range(days):
         date_str = (today - timedelta(days=i)).strftime("%Y-%m-%d")

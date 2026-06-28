@@ -63,7 +63,7 @@ def run_daily(cfg: dict, no_telegram: bool = False, output_format: str = "text")
     credits_used = 0
 
     # Step 0: Cleanup old files
-    retention.cleanup(DAILY_DIR, WEEKLY_DIR, STATE_DIR, settings["retention_days"])
+    retention.cleanup(DAILY_DIR, WEEKLY_DIR, STATE_DIR, settings["retention_days"], tz=cfg["timezone"])
 
     # Step 1: Fetch trending narratives (5 credits)
     log.info("Fetching trending narratives...")
@@ -146,8 +146,8 @@ def run_daily(cfg: dict, no_telegram: bool = False, output_format: str = "text")
 
     # Step 7: Narrative shifts
     log.info("Analyzing narrative shifts...")
-    shift_data = shift_analysis.analyze_shifts(narratives, STATE_DIR)
-    velocity = shift_analysis.calculate_velocity(STATE_DIR, narratives, days=3)
+    shift_data = shift_analysis.analyze_shifts(narratives, STATE_DIR, tz=cfg["timezone"])
+    velocity = shift_analysis.calculate_velocity(STATE_DIR, narratives, days=3, tz=cfg["timezone"])
     boundary = shift_analysis.boundary_watch(narratives, STATE_DIR)
 
     # Step 8: Generate questions from contradictions
@@ -158,7 +158,7 @@ def run_daily(cfg: dict, no_telegram: bool = False, output_format: str = "text")
     narratives_with_data = {n["name"]: n for n in narratives}
     questions = prompt_analysis.generate_questions(
         contradictions, narratives_with_data,
-        cfg["llm_provider"], cfg["llm_model"], cfg["llm_key"],
+        cfg["llm_provider"], cfg["llm_model"], cfg["llm_key"], cfg["llm_base_url"],
     )
 
     # CoinGecko cross-signals: trending tokens NOT in Elfa's top narratives
@@ -203,12 +203,11 @@ def run_daily(cfg: dict, no_telegram: bool = False, output_format: str = "text")
         f.write(report)
     log.info(f"Report saved to {report_path}")
 
-    # Save state
+    # Save state (narratives + token signals in one call)
     state_storage.save_state(STATE_DIR, narratives, {"token_signals": {
         k: {"signal_history": v.get("signal_history", []), "days_appearing": v.get("days_appearing", 1)}
         for k, v in classified.items()
-    }})
-    signal_analysis.save_token_signals(classified, STATE_DIR, state_storage)
+    }}, tz=cfg["timezone"])
 
     # Deliver
     if not no_telegram:
@@ -232,7 +231,7 @@ def run_weekly(cfg: dict, no_telegram: bool = False, output_format: str = "text"
     log.info("=== WEEKLY REPORT START ===")
 
     # Step 1: Load daily reports + states
-    states = state_storage.load_week(STATE_DIR, days=7)
+    states = state_storage.load_week(STATE_DIR, days=7, tz=cfg["timezone"])
     log.info(f"Loaded {len(states)} daily states")
 
     if len(states) < 2:
@@ -256,19 +255,21 @@ def run_weekly(cfg: dict, no_telegram: bool = False, output_format: str = "text"
     themes = prompt_analysis.generate_weekly_themes(
         reports=[], agg=agg,
         provider=cfg["llm_provider"], model=cfg["llm_model"], api_key=cfg["llm_key"],
+        base_url=cfg["llm_base_url"],
     )
 
     log.info("Generating weekly questions...")
     questions = prompt_analysis.generate_weekly_questions(
         reports=[], agg=agg, token_progression=token_progression,
         provider=cfg["llm_provider"], model=cfg["llm_model"], api_key=cfg["llm_key"],
+        base_url=cfg["llm_base_url"],
     )
 
     # Step 7: Format
     report = formatter.format_weekly(
         agg=agg, themes=themes, questions=questions,
         token_progression=token_progression, cross_signals=cross_signals,
-        tz=cfg["timezone"],
+        tz=cfg["timezone"], tz_display=cfg["timezone_display"],
     )
 
     # Output
@@ -376,7 +377,7 @@ def _track_cross_signals(daily_dir: Path) -> list[str]:
 def run_cleanup(cfg: dict):
     """Run retention cleanup only."""
     settings = cfg["settings"]
-    deleted = retention.cleanup(DAILY_DIR, WEEKLY_DIR, STATE_DIR, settings["retention_days"])
+    deleted = retention.cleanup(DAILY_DIR, WEEKLY_DIR, STATE_DIR, settings["retention_days"], tz=cfg["timezone"])
     print(f"Cleanup complete: {deleted} files deleted")
 
 

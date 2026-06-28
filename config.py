@@ -80,6 +80,7 @@ def load():
         "llm_key": llm_key,
         "llm_provider": llm.get("provider", "openai"),
         "llm_model": llm.get("model", "gpt-4o-mini"),
+        "llm_base_url": llm.get("base_url", ""),
         "bot_token": bot_token,
         "timezone": tz,
         "timezone_name": tz_name,

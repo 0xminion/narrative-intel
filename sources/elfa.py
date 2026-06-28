@@ -27,7 +27,9 @@ def _get(api_key: str, path: str, params: dict | None = None, retries: int = 3) 
                 wait = int(resp.headers.get("Retry-After", 5))
                 log.warning(f"Rate limited, waiting {wait}s")
                 time.sleep(wait)
-                continue
+                if attempt < retries - 1:
+                    continue
+                raise requests.exceptions.RequestException(f"Rate limited after {retries} attempts")
             resp.raise_for_status()
             return resp.json()
         except requests.exceptions.RequestException as e:
@@ -38,6 +40,8 @@ def _get(api_key: str, path: str, params: dict | None = None, retries: int = 3) 
             else:
                 log.error(f"Request failed after {retries} attempts: {e}")
                 raise
+    # Should never reach here, but guard against implicit None return
+    raise requests.exceptions.RequestException(f"Request failed after {retries} attempts (exhausted)")
 
 
 def get_trending_narratives(api_key: str, time_frame: str = "day", max_narratives: int = 10) -> list[dict]:

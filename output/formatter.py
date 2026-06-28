@@ -2,6 +2,7 @@
 
 import logging
 from datetime import datetime, timezone, timedelta
+from typing import Optional
 from analysis.signals import get_signal_display
 
 log = logging.getLogger(__name__)
@@ -10,7 +11,7 @@ log = logging.getLogger(__name__)
 def format_daily(narratives: list[dict], shifts: dict, velocity: dict,
                  boundary: list[dict], classified: dict, sentiment: dict,
                  questions: dict, cg_cross: list[dict], credits_used: int,
-                 settings: dict, tz: timezone = None, tz_display: str = "UTC") -> str:
+                 settings: dict, tz=None, tz_display: str = "UTC") -> str:
     """Format the daily narrative shift report."""
     if tz is None:
         tz = timezone.utc
@@ -187,7 +188,7 @@ def format_daily(narratives: list[dict], shifts: dict, velocity: dict,
 
 def format_weekly(agg: dict, themes: dict, questions: list[str],
                   token_progression: dict, cross_signals: list[dict],
-                  tz: timezone = None) -> str:
+                  tz=None, tz_display: str = "UTC") -> str:
     """Format the weekly highlights report."""
     if tz is None:
         tz = timezone.utc
@@ -197,7 +198,7 @@ def format_weekly(agg: dict, themes: dict, questions: list[str],
 
     lines = []
     lines.append(f"📊 WEEKLY NARRATIVE HIGHLIGHTS — {week_start}-{week_end}")
-    lines.append(f"🏆 Compiled from daily reports | No API calls")
+    lines.append(f"⏰ {now.strftime('%H:%M')} {tz_display} | 🏆 Compiled from daily reports | No API calls")
     lines.append("")
 
     # Narrative of the week

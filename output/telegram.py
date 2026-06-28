@@ -77,23 +77,33 @@ def send_to_destinations(destinations: list[dict], default_bot_token: str,
     return delivered
 
 
-def _send_message(bot_token: str, chat_id: str, text: str) -> bool:
-    """Send a single message via Telegram Bot API."""
+def _send_message(bot_token: str, chat_id: str, text: str, retries: int = 3) -> bool:
+    """Send a single message via Telegram Bot API. Retries on 429 rate limits."""
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    try:
-        payload = {
-            "chat_id": chat_id,
-            "text": text,
-        }
-        resp = requests.post(url, json=payload, timeout=30)
-        if resp.status_code == 200:
-            return True
-        else:
-            log.error(f"Telegram API error: {resp.status_code} - {resp.text}")
-            return False
-    except Exception as e:
-        log.error(f"Telegram send failed: {e}")
-        return False
+    for attempt in range(retries):
+        try:
+            payload = {
+                "chat_id": chat_id,
+                "text": text,
+            }
+            resp = requests.post(url, json=payload, timeout=30)
+            if resp.status_code == 200:
+                return True
+            elif resp.status_code == 429:
+                wait = int(resp.headers.get("Retry-After", 5))
+                log.warning(f"Telegram rate limited, waiting {wait}s (attempt {attempt+1}/{retries})")
+                time.sleep(wait)
+                continue
+            else:
+                log.error(f"Telegram API error: {resp.status_code} - {resp.text}")
+                return False
+        except Exception as e:
+            log.error(f"Telegram send failed: {e}")
+            if attempt < retries - 1:
+                time.sleep(2 ** attempt)
+            else:
+                return False
+    return False
 
 
 def _send_webhook(url: str, text: str, format: str = "text") -> bool:

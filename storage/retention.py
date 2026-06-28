@@ -1,16 +1,18 @@
 """30-day retention cleanup for reports and state files."""
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 log = logging.getLogger(__name__)
 
 
 def cleanup(daily_dir: Path, weekly_dir: Path, state_dir: Path,
-            retention_days: int = 30) -> int:
+            retention_days: int = 30, tz=None) -> int:
     """Delete files older than retention_days. Returns count of deleted files."""
-    cutoff = datetime.utcnow() - timedelta(days=retention_days)
+    if tz is None:
+        tz = timezone.utc
+    cutoff = datetime.now(tz) - timedelta(days=retention_days)
     deleted = 0
 
     for directory in [daily_dir, weekly_dir, state_dir]:

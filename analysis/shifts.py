@@ -1,13 +1,13 @@
 """Narrative shift detection, velocity tracking, and boundary watch."""
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from storage.state import load_state, load_state_date
 
 log = logging.getLogger(__name__)
 
 
-def analyze_shifts(current_narratives: list[dict], state_dir) -> dict:
+def analyze_shifts(current_narratives: list[dict], state_dir, tz=None) -> dict:
     """Compare current narratives to previous day. Returns shift classifications."""
     prev = load_state(state_dir)
     prev_map = {n["name"].lower(): n for n in prev.get("narratives", [])}
@@ -77,13 +77,16 @@ def analyze_shifts(current_narratives: list[dict], state_dir) -> dict:
     return shifts
 
 
-def calculate_velocity(state_dir, current_narratives: list[dict], days: int = 3) -> dict:
+def calculate_velocity(state_dir, current_narratives: list[dict], days: int = 3,
+                       tz=None) -> dict:
     """Calculate 3-day trajectory for each narrative."""
     velocity = {}
 
     # Load states from past N days
     past_states = []
-    today = datetime.utcnow()
+    if tz is None:
+        tz = timezone.utc
+    today = datetime.now(tz)
     for i in range(1, days + 1):
         date_str = (today - timedelta(days=i)).strftime("%Y-%m-%d")
         state = load_state_date(state_dir, date_str)
@@ -108,7 +111,7 @@ def calculate_velocity(state_dir, current_narratives: list[dict], days: int = 3)
         if len(ranks) >= 2:
             # Compare first and last in window
             net_change = ranks[-1] - ranks[0]  # positive = moved down (bad)
-            recent_change = ranks[-1] - current_rank if ranks else 0
+            recent_change = ranks[-1] - current_rank
 
             if abs(recent_change) > abs(net_change) / max(len(ranks), 1):
                 velocity[name] = "accelerating" if recent_change > 0 else "decelerating"

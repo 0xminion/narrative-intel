@@ -72,8 +72,9 @@ TELEGRAM_BOT_TOKEN=fallback_bot_token
 bot_token: ""                    # falls back to TELEGRAM_BOT_TOKEN env var
 
 llm:
-  provider: "openai"            # openai or anthropic
+  provider: "openai"            # openai, openrouter, or anthropic
   model: "gpt-4o-mini"          # or claude-sonnet-4-20250514
+  base_url: "https://api.openai.com/v1"  # optional: override for custom OpenAI-compatible endpoints
 
 settings:
   timezone: "Asia/Singapore"    # IANA timezone for report timestamps

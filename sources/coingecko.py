@@ -40,6 +40,8 @@ def get_trending(limit: int = 15) -> list[dict]:
                     "symbol": coin.get("symbol", "").upper(),
                     "name": coin.get("name", ""),
                     "rank": len(results) + 1,
+                    "change_24h": _parse_change(coin.get("price_change_percentage_24h",
+                                       coin.get("usd_24h_change", 0))),
                 })
         return results
     except Exception as e:

@@ -95,7 +95,8 @@ def detect_contradictions(narratives: list[dict], shifts: dict, classified: dict
 
 
 def generate_questions(contradictions: list[dict], narratives_with_data: dict,
-                       provider: str, model: str, api_key: str) -> dict:
+                       provider: str, model: str, api_key: str,
+                       base_url: str = "") -> dict:
     """Generate per-narrative 'think about' questions from contradictions.
     Programmatic templates + LLM polish.
 
@@ -124,7 +125,7 @@ def generate_questions(contradictions: list[dict], narratives_with_data: dict,
 
     # Polish with LLM
     try:
-        polished = _llm_polish_questions(template_questions, provider, model, api_key)
+        polished = _llm_polish_questions(template_questions, provider, model, api_key, base_url)
         return polished
     except Exception as e:
         log.warning(f"LLM polish failed, using templates: {e}")
@@ -132,7 +133,8 @@ def generate_questions(contradictions: list[dict], narratives_with_data: dict,
 
 
 def generate_weekly_questions(reports: list[str], agg: dict, token_progression: dict,
-                              provider: str, model: str, api_key: str) -> list[str]:
+                              provider: str, model: str, api_key: str,
+                              base_url: str = "") -> list[str]:
     """Generate weekly 'questions to research' section."""
     prompt = f"""Based on this weekly narrative data, generate 4-6 deep research questions.
 
@@ -151,16 +153,8 @@ Return as JSON array: ["question 1", "question 2", ...]"""
     try:
         raw = _call_llm(provider, model, api_key,
                         "You are a crypto research analyst generating deep investigative questions.",
-                        prompt)
-        cleaned = raw.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-        if cleaned.endswith("```"):
-            cleaned = cleaned[:-3]
-        cleaned = cleaned.strip()
-        if cleaned.startswith("json"):
-            cleaned = cleaned[4:].strip()
-        return json.loads(cleaned)
+                        prompt, base_url)
+        return json.loads(_clean_json_response(raw))
     except Exception as e:
         log.warning(f"Weekly question generation failed: {e}")
         return ["Review this week's narrative shifts for patterns worth investigating further."]
@@ -204,7 +198,7 @@ def _template_question(contradiction: dict, context: dict) -> str | None:
 
 
 def _llm_polish_questions(template_questions: dict, provider: str, model: str,
-                          api_key: str) -> dict:
+                          api_key: str, base_url: str = "") -> dict:
     """Polish template questions with LLM for natural phrasing."""
     prompt = f"""Polish these data-grounded crypto questions. Keep all facts and numbers EXACTLY as given.
 Do NOT add new claims or data. Only improve phrasing and flow.
@@ -216,7 +210,12 @@ Return the same JSON structure with polished text. Keep each question as a singl
 
     raw = _call_llm(provider, model, api_key,
                     "You are a text editor. Polish questions without changing any facts.",
-                    prompt)
+                    prompt, base_url)
+    return json.loads(_clean_json_response(raw))
+
+
+def _clean_json_response(raw: str) -> str:
+    """Strip markdown code fences and json prefix from LLM response."""
     cleaned = raw.strip()
     if cleaned.startswith("```"):
         cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
@@ -225,18 +224,20 @@ Return the same JSON structure with polished text. Keep each question as a singl
     cleaned = cleaned.strip()
     if cleaned.startswith("json"):
         cleaned = cleaned[4:].strip()
-    return json.loads(cleaned)
+    return cleaned
 
 
-def _call_llm(provider: str, model: str, api_key: str, system: str, user: str) -> str:
+def _call_llm(provider: str, model: str, api_key: str, system: str, user: str,
+              base_url: str = "") -> str:
     """Call the appropriate LLM API."""
-    base_urls = {
+    default_urls = {
         "openai": "https://api.openai.com/v1",
         "openrouter": "https://openrouter.ai/api/v1",
     }
 
     if provider in ("openai", "openrouter"):
-        url = f"{base_urls.get(provider, base_urls['openai'])}/chat/completions"
+        url = base_url if base_url else default_urls.get(provider, default_urls["openai"])
+        url = f"{url.rstrip('/')}/chat/completions"
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         if provider == "openrouter":
             headers["HTTP-Referer"] = "https://github.com/narrative-intel"
@@ -266,7 +267,8 @@ def _call_llm(provider: str, model: str, api_key: str, system: str, user: str) -
 
 
 def generate_weekly_themes(reports: list[str], agg: dict,
-                           provider: str, model: str, api_key: str) -> dict:
+                           provider: str, model: str, api_key: str,
+                           base_url: str = "") -> dict:
     """Generate weekly biggest themes (positive + negative) from daily reports."""
     prompt = f"""Based on this week's daily narrative reports, identify the BIGGEST THEMES.
 
@@ -294,16 +296,8 @@ Return JSON:
     try:
         raw = _call_llm(provider, model, api_key,
                         "You are a crypto narrative analyst. Synthesize themes from data.",
-                        prompt)
-        cleaned = raw.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-        if cleaned.endswith("```"):
-            cleaned = cleaned[:-3]
-        cleaned = cleaned.strip()
-        if cleaned.startswith("json"):
-            cleaned = cleaned[4:].strip()
-        return json.loads(cleaned)
+                        prompt, base_url)
+        return json.loads(_clean_json_response(raw))
     except Exception as e:
         log.warning(f"Weekly themes generation failed: {e}")
         return {"positive": [], "negative": []}

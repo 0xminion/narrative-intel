@@ -6,14 +6,15 @@ bot_token: ""  # or leave empty, falls back to TELEGRAM_BOT_TOKEN env var
 
 # LLM configuration for sentiment analysis and question generation
 llm:
-  provider: "openai"           # openai or anthropic
+  provider: "openai"           # openai, openrouter, or anthropic
   model: "gpt-4o-mini"         # e.g., gpt-4o-mini, claude-sonnet-4-20250514
+  base_url: ""                # optional: override for custom OpenAI-compatible endpoints
   # api_key resolved from LLM_API_KEY env var by default
 
 # Elfa API configuration
 elfa:
+  api_key: ""  # or leave empty, falls back to ELFA_API_KEY env var
   # api_key resolved from ELFA_API_KEY env var by default
-  pass
 
 # Analysis settings
 settings:
