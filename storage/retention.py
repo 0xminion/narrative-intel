@@ -28,6 +28,9 @@ def cleanup(daily_dir: Path, weekly_dir: Path, state_dir: Path,
 
             # Try to parse date from filename
             file_date = _parse_date_from_filename(f.name)
+            if file_date:
+                # Localize naive datetime to the configured tz for comparison
+                file_date = file_date.replace(tzinfo=tz)
             if file_date and file_date < cutoff:
                 try:
                     f.unlink()
