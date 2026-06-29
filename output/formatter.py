@@ -17,8 +17,8 @@ def format_daily(narratives: list[dict], shifts: dict, velocity: dict,
 
     Args:
         x_search_context: Optional dict {narrative_name: str} with synthesized
-                         x_search insights per narrative. When present, adds a
-                         "X SEARCH INTEL" section to the report.
+                         x_search insights per narrative. When present, insights
+                         are woven into each narrative block as a "CT says:" line.
     """
     if tz is None:
         tz = timezone.utc
@@ -29,9 +29,15 @@ def format_daily(narratives: list[dict], shifts: dict, velocity: dict,
     tokens_neutral = settings.get("tokens_neutral", 3)
 
     lines = []
+    header_sources = "Elfa + CoinGecko + xSearch" if x_search_context else "Elfa + CoinGecko"
     lines.append(f"📊 NARRATIVE SHIFT REPORT — {date_str}")
-    lines.append(f"⏰ {time_str} {tz_display} | 📊 {credits_used} credits")
+    lines.append(f"⏰ {time_str} {tz_display} | 📊 {credits_used} credits | {header_sources}")
     lines.append("")
+
+    # Helper to add xSearch insight inline
+    def _add_xsearch(lines, name):
+        if x_search_context and name in x_search_context:
+            lines.append(f"  🐦 CT says: {x_search_context[name]}")
 
     # Positive shifts
     if shifts.get("positive"):
@@ -74,13 +80,8 @@ def format_daily(narratives: list[dict], shifts: dict, velocity: dict,
                     for r in sent["negative_reasons"][:2]:
                         lines.append(f"  • {r}")
 
-            # Think about questions
-            nq = questions.get(name, [])
-            if nq:
-                lines.append("")
-                lines.append("  💭 Think about:")
-                for q in nq[:2]:
-                    lines.append(f"  → {q}")
+            # xSearch insight woven in
+            _add_xsearch(lines, name)
 
             lines.append("")
 
@@ -109,12 +110,8 @@ def format_daily(narratives: list[dict], shifts: dict, velocity: dict,
                 for t in narrative_tokens[:tokens_shift]:
                     lines.append(f"  • {_format_token_line(t)}")
 
-            nq = questions.get(name, [])
-            if nq:
-                lines.append("")
-                lines.append("  💭 Think about:")
-                for q in nq[:2]:
-                    lines.append(f"  → {q}")
+            # xSearch insight woven in
+            _add_xsearch(lines, name)
 
             lines.append("")
 
@@ -141,10 +138,8 @@ def format_daily(narratives: list[dict], shifts: dict, velocity: dict,
 
             lines.append(f"— {name}: {entry['delta_display']} | {token_display}{sent_note}")
 
-            # Brief think about for neutral
-            nq = questions.get(name, [])
-            if nq:
-                lines.append(f"  💭 {nq[0]}")
+            # xSearch insight woven in (inline for neutral)
+            _add_xsearch(lines, name)
 
         lines.append("")
 
@@ -156,18 +151,6 @@ def format_daily(narratives: list[dict], shifts: dict, velocity: dict,
         lines.append("")
         for b in boundary[:3]:
             lines.append(f"⚠️ {b['name']}: {b['note']} — approaching top 10")
-        lines.append("")
-
-    # X Search intel section (when enriched by agent)
-    if x_search_context:
-        lines.append("══════════════════════════════")
-        lines.append("🤖 X SEARCH INTEL")
-        lines.append("══════════════════════════════")
-        lines.append("")
-        for narrative_name, insight in x_search_context.items():
-            lines.append(f"▸ {narrative_name}")
-            lines.append(f"  {insight}")
-            lines.append("")
         lines.append("")
 
     # Sector signals
@@ -200,10 +183,7 @@ def format_daily(narratives: list[dict], shifts: dict, velocity: dict,
         lines.append("")
 
     lines.append(f"══════════════════════════════")
-    source_label = "Elfa + CoinGecko"
-    if x_search_context:
-        source_label = "Elfa + CoinGecko + xSearch"
-    lines.append(f"📊 {credits_used} credits | {source_label}")
+    lines.append(f"📊 {credits_used} credits | {header_sources}")
 
     return "\n".join(lines)
 
