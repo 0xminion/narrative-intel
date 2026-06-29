@@ -34,10 +34,40 @@ def format_daily(narratives: list[dict], shifts: dict, velocity: dict,
     lines.append(f"⏰ {time_str} {tz_display} | 📊 {credits_used} credits | {header_sources}")
     lines.append("")
 
-    # Helper to add xSearch insight inline
+    # Helper to add xSearch insight inline with source links
     def _add_xsearch(lines, name):
-        if x_search_context and name in x_search_context:
-            lines.append(f"  🐦 CT says: {x_search_context[name]}")
+        if not x_search_context or name not in x_search_context:
+            return
+        ctx = x_search_context[name]
+        if isinstance(ctx, dict):
+            insight = ctx.get("insight", "")
+            sources = ctx.get("sources", [])
+            lines.append(f"  🐦 CT says: {insight}")
+            if sources:
+                ref_parts = []
+                for s in sources[:3]:
+                    text = s.get("text", "source")[:40]
+                    url = s.get("url", "")
+                    if url:
+                        ref_parts.append(f"[{text}]({url})")
+                    else:
+                        ref_parts.append(text)
+                lines.append(f"  📎 Sources: {' · '.join(ref_parts)}")
+        elif isinstance(ctx, str):
+            lines.append(f"  🐦 CT says: {ctx}")
+
+    # Helper to add Elfa source links
+    def _add_elfa_sources(lines, name):
+        # Find narrative in narratives list to get source_links
+        for n in narratives:
+            if n["name"] == name and n.get("source_links"):
+                links = n["source_links"][:2]
+                if links:
+                    ref_parts = []
+                    for link in links:
+                        ref_parts.append(f"[post]({link})")
+                    lines.append(f"  📎 Elfa: {' · '.join(ref_parts)}")
+                break
 
     # Positive shifts
     if shifts.get("positive"):
@@ -83,6 +113,9 @@ def format_daily(narratives: list[dict], shifts: dict, velocity: dict,
             # xSearch insight woven in
             _add_xsearch(lines, name)
 
+            # Elfa source links
+            _add_elfa_sources(lines, name)
+
             lines.append("")
 
     # Negative shifts
@@ -113,6 +146,9 @@ def format_daily(narratives: list[dict], shifts: dict, velocity: dict,
             # xSearch insight woven in
             _add_xsearch(lines, name)
 
+            # Elfa source links
+            _add_elfa_sources(lines, name)
+
             lines.append("")
 
     # Neutral (compressed)
@@ -140,6 +176,9 @@ def format_daily(narratives: list[dict], shifts: dict, velocity: dict,
 
             # xSearch insight woven in (inline for neutral)
             _add_xsearch(lines, name)
+
+            # Elfa source links
+            _add_elfa_sources(lines, name)
 
         lines.append("")
 
