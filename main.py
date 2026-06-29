@@ -183,7 +183,27 @@ def run_daily(cfg: dict, no_telegram: bool = False, output_format: str = "text")
     )
 
     # Step 10: Output
-    if output_format == "json":
+    if output_format == "agent":
+        # Agent JSON: clean data for Hermes agent to enrich with x_search
+        output = {
+            "narratives": narratives,
+            "shifts": shift_data,
+            "velocity": velocity,
+            "boundary": boundary,
+            "classified_tokens": {k: {kk: vv for kk, vv in v.items()
+                                        if kk != "signal_history"} 
+                                  for k, v in classified.items()},
+            "sentiment": sentiment,
+            "questions": questions,
+            "cg_cross": cg_cross,
+            "cg_trending": cg_trending,
+            "emerging_tokens": emerging,
+            "credits_used": credits_used,
+            "date": datetime.now(cfg["timezone"]).strftime("%Y-%m-%d"),
+            "timezone_display": cfg["timezone_display"],
+        }
+        print(json.dumps(output, indent=2, default=str))
+    elif output_format == "json":
         output = {
             "report": report,
             "narratives": narratives,

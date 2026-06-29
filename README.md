@@ -124,6 +124,41 @@ destinations:
 2. Get your user ID from `@userinfobot`
 3. Set `chat_id` as your user ID (positive number)
 
+## Agent-Native Mode (xSearch Enrichment)
+
+For richer sentiment and real tweet content, run narrative-intel as a Hermes cron job.
+The agent runs the Python pipeline (`--format agent --no-telegram`), then calls `x_search`
+for each top narrative to get actual CT content, synthesizes insights, and delivers the
+enriched report to Telegram.
+
+### Pipeline (agent-native)
+
+1. Agent runs: `python main.py daily --format agent --no-telegram` → gets clean JSON
+2. Agent calls `x_search` for each top narrative (batched, using narrative keywords)
+3. Agent synthesizes x_search results into per-narrative insights
+4. Agent formats the final report with the "🤖 X SEARCH INTEL" section
+5. Agent delivers to Telegram
+
+### Why agent-native?
+
+- **Real tweet text**: Elfa API returns engagement metadata only (no tweet content).
+  x_search gives the agent actual posts, threads, and breaking news.
+- **LLM-grade sentiment**: Instead of heuristic engagement scoring, the agent reads
+  what CT is actually saying and synthesizes qualitative sentiment.
+- **Breaking news detection**: x_search catches developments that haven't surfaced
+  in Elfa's trending narratives yet.
+- **No extra API key needed**: Uses xAI OAuth via Hermes (no XAI_API_KEY in .env).
+
+### CLI: Agent JSON output
+
+```bash
+python main.py daily --no-telegram --format agent
+```
+
+Outputs clean JSON with all pipeline data (narratives, shifts, sentiment, classified
+tokens, questions, cg_cross, emerging_tokens) — no formatted report, ready for agent
+enrichment.
+
 ## Cron Setup
 
 **The code has no hardcoded times.** You set the schedule entirely via cron. The report header shows the actual run time based on your configured timezone.

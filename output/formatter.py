@@ -11,8 +11,15 @@ log = logging.getLogger(__name__)
 def format_daily(narratives: list[dict], shifts: dict, velocity: dict,
                  boundary: list[dict], classified: dict, sentiment: dict,
                  questions: dict, cg_cross: list[dict], credits_used: int,
-                 settings: dict, tz=None, tz_display: str = "UTC") -> str:
-    """Format the daily narrative shift report."""
+                 settings: dict, tz=None, tz_display: str = "UTC",
+                 x_search_context: dict | None = None) -> str:
+    """Format the daily narrative shift report.
+
+    Args:
+        x_search_context: Optional dict {narrative_name: str} with synthesized
+                         x_search insights per narrative. When present, adds a
+                         "X SEARCH INTEL" section to the report.
+    """
     if tz is None:
         tz = timezone.utc
     now = datetime.now(tz)
@@ -151,6 +158,18 @@ def format_daily(narratives: list[dict], shifts: dict, velocity: dict,
             lines.append(f"⚠️ {b['name']}: {b['note']} — approaching top 10")
         lines.append("")
 
+    # X Search intel section (when enriched by agent)
+    if x_search_context:
+        lines.append("══════════════════════════════")
+        lines.append("🤖 X SEARCH INTEL")
+        lines.append("══════════════════════════════")
+        lines.append("")
+        for narrative_name, insight in x_search_context.items():
+            lines.append(f"▸ {narrative_name}")
+            lines.append(f"  {insight}")
+            lines.append("")
+        lines.append("")
+
     # Sector signals
     lines.append("══════════════════════════════")
     lines.append("💡 TODAY'S SECTOR SIGNALS")
@@ -181,7 +200,10 @@ def format_daily(narratives: list[dict], shifts: dict, velocity: dict,
         lines.append("")
 
     lines.append(f"══════════════════════════════")
-    lines.append(f"📊 {credits_used} credits | Elfa + CoinGecko")
+    source_label = "Elfa + CoinGecko"
+    if x_search_context:
+        source_label = "Elfa + CoinGecko + xSearch"
+    lines.append(f"📊 {credits_used} credits | {source_label}")
 
     return "\n".join(lines)
 
